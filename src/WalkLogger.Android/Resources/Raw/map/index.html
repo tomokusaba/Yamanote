@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>街歩きの実測ルート</title>
+  <link rel="stylesheet" href="leaflet/leaflet.css">
+  <link rel="stylesheet" href="map.css">
+</head>
+<body>
+  <div id="map" aria-label="実測ルート"></div>
+  <div id="notice" role="status">GPS未取得・地図は初期表示</div>
+  <script src="leaflet/leaflet.js"></script>
+  <script src="map.js"></script>
+</body>
+</html>

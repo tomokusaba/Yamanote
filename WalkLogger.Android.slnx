@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WalkLogger.Android/WalkLogger.Android.csproj" />
+    <Project Path="src/WalkLogger.Recording/WalkLogger.Recording.csproj" />
+    <Project Path="src/WalkLogger.Recording.Infrastructure/WalkLogger.Recording.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WalkLogger.Recording.Tests/WalkLogger.Recording.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,15 @@
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*[\\/]WalkLogger\.Recording(\.Infrastructure)?\.dll$</ModulePath>
+      </Include>
+      <IncludeDirectories>
+        <Directory>tests\WalkLogger.Recording.Tests\bin\Debug\net10.0</Directory>
+      </IncludeDirectories>
+    </ModulePaths>
+    <Sources><Exclude><Source>.*[\\/]obj[\\/].*</Source></Exclude></Sources>
+    <EnableStaticManagedInstrumentation>True</EnableStaticManagedInstrumentation>
+    <EnableDynamicManagedInstrumentation>True</EnableDynamicManagedInstrumentation>
+  </CodeCoverage>
+</Configuration>

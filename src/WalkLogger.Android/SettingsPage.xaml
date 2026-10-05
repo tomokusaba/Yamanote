@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:WalkLogger.Mobile"
+             x:Class="WalkLogger.Mobile.SettingsPage" x:DataType="local:RecorderViewModel"
+             Title="記録設定" SafeAreaEdges="All">
+  <ScrollView>
+    <VerticalStackLayout Padding="16" Spacing="16">
+      <Label Text="屋外で歩くための設定" FontSize="22" FontAttributes="Bold"
+             SemanticProperties.HeadingLevel="Level1" />
+      <Label Text="GPS記録間隔" FontAttributes="Bold" />
+      <Picker x:Name="IntervalPicker" Title="記録間隔" MinimumHeightRequest="48"
+              SelectedIndexChanged="IntervalChanged" />
+      <Label Text="変更は次の新しい記録から適用します。現在の記録を再開しても間隔は変わりません。" FontSize="14" />
+      <Label Text="画面を閉じても記録を続ける" FontAttributes="Bold" Margin="0,8,0,0" />
+      <Label Text="位置情報と通知を許可してください。記録中は位置情報のフォアグラウンドサービスと通知を使用します。強制停止・端末再起動後はアプリから再開してください。" />
+      <Label Text="端末メーカーの省電力制限によって停止する場合は、Androidのアプリ設定でWalkLoggerのバッテリー使用制限を確認してください。長時間の記録は電池を消費します。" />
+      <Button Text="Androidのアプリ設定を開く" Clicked="OpenAppSettings"
+              Style="{StaticResource SecondaryButton}" />
+      <Label Text="保存とプライバシー" FontAttributes="Bold" Margin="0,8,0,0" />
+      <Label Text="GPS・写真・写真メモはアプリ専用領域に保存します。アプリの削除やデータ消去で失われるため、記録一覧からZIPを共有してバックアップしてください。" />
+      <Label Text="地図の表示範囲はOpenStreetMapのタイルサーバーへ送信されます。GPSログ・写真の共有は確認後に行います。OneDriveの自動同期やMicrosoftアカウントへのログインは行いません。" />
+      <Label Text="整理とAI草稿はWindows版で" FontAttributes="Bold" Margin="0,8,0,0" />
+      <Label Text="このAndroid版はCoreS3の代わりになる記録端末です。地名の取得、ブログ生成、過去との比較、年次集計はWindows版で行います。" />
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

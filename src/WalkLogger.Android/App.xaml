@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="WalkLogger.Mobile.App">
+  <Application.Resources>
+    <ResourceDictionary>
+      <Style TargetType="ContentPage">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F4F7FA, Dark=#14212B}" />
+      </Style>
+      <Style TargetType="Label">
+        <Setter Property="TextColor" Value="{AppThemeBinding Light=#192C3B, Dark=#E4ECF1}" />
+        <Setter Property="FontSize" Value="16" />
+      </Style>
+      <Style x:Key="ButtonBase" TargetType="Button">
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#147D78, Dark=#91D5CE}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light=White, Dark=#003733}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+          <VisualStateGroupList>
+            <VisualStateGroup x:Name="CommonStates">
+              <VisualState x:Name="Normal" />
+              <VisualState x:Name="Disabled">
+                <VisualState.Setters>
+                  <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#D8E1E7, Dark=#34434D}" />
+                  <Setter Property="TextColor" Value="{AppThemeBinding Light=#526574, Dark=#AABAC5}" />
+                </VisualState.Setters>
+              </VisualState>
+            </VisualStateGroup>
+          </VisualStateGroupList>
+        </Setter>
+      </Style>
+      <Style TargetType="Button" BasedOn="{StaticResource ButtonBase}" />
+      <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#E0EFEC, Dark=#284D49}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light=#174A46, Dark=#BCEAE4}" />
+      </Style>
+      <Style TargetType="Entry">
+        <Setter Property="MinimumHeightRequest" Value="48" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light=#192C3B, Dark=#E4ECF1}" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light=#526574, Dark=#AABAC5}" />
+      </Style>
+      <Style TargetType="Shell">
+        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#14212B}" />
+        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light=#192C3B, Dark=#E4ECF1}" />
+        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light=#192C3B, Dark=#E4ECF1}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light=#EDF2F6, Dark=#21323D}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light=#147D78, Dark=#91D5CE}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light=#526574, Dark=#AABAC5}" />
+      </Style>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:WalkLogger.Mobile"
+             x:Class="WalkLogger.Mobile.MainPage" x:DataType="local:RecorderViewModel"
+             Title="街歩きを記録" SafeAreaEdges="All">
+  <ScrollView>
+    <VerticalStackLayout Padding="16" Spacing="16">
+      <Label Text="{Binding Status}" FontSize="22" FontAttributes="Bold"
+             SemanticProperties.HeadingLevel="Level1" />
+      <local:RouteMapView x:Name="RouteMap" HeightRequest="270" />
+      <Label Text="地図は通信が必要です。オフラインでもGPS記録は継続します。" FontSize="14" />
+      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="4">
+        <Label Text="実測距離" FontSize="14" />
+        <Label Grid.Column="1" Text="GPS区間の経過時間" FontSize="14" />
+        <Label Grid.Row="1" Text="{Binding Distance}" FontSize="28" FontAttributes="Bold" />
+        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Elapsed}" FontSize="24" />
+      </Grid>
+      <Label Text="{Binding FixStatus}" FontSize="14" />
+      <Label Text="{Binding Counts}" FontSize="14" />
+      <ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}"
+                         Color="{AppThemeBinding Light=#147D78, Dark=#91D5CE}" />
+      <Button Text="{Binding PrimaryLabel}" Command="{Binding PrimaryCommand}"
+              IsEnabled="{Binding CanPrimary}" />
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+        <Button Text="一時停止" Command="{Binding PauseCommand}" IsEnabled="{Binding CanPause}"
+                Style="{StaticResource SecondaryButton}" />
+        <Button Grid.Column="1" Text="記録を終了" Command="{Binding FinishCommand}"
+                IsEnabled="{Binding CanFinish}" Style="{StaticResource SecondaryButton}" />
+      </Grid>
+      <Entry Text="{Binding PhotoNote}" Placeholder="写真の観察メモ（任意）"
+             SemanticProperties.Description="次に撮る写真へ添える観察メモ" />
+      <Button Text="写真を撮る" Command="{Binding PhotoCommand}" IsEnabled="{Binding CanPhoto}"
+              Style="{StaticResource SecondaryButton}" />
+      <Label Text="{Binding Message}" TextColor="{AppThemeBinding Light=#943C26, Dark=#FFB4A2}" />
+      <Label Text="記録中は通知を表示します。画面を閉じても記録は続き、GPSと写真は共有するまで端末内に保存されます。"
+             FontSize="14" />
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

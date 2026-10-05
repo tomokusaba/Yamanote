@@ -1,0 +1,4 @@
+html, body, #map { margin: 0; width: 100%; height: 100%; background: #EDF2F6; }
+#notice { position: absolute; z-index: 1000; left: 8px; right: 8px; bottom: 28px; padding: 8px; background: #FFFFFF; color: #192C3B; font: 14px/1.5 sans-serif; }
+.leaflet-control-zoom a { min-width: 48px; min-height: 48px; line-height: 48px; }
+.leaflet-control-attribution { font-size: 12px; }

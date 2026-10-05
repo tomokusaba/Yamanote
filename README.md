@@ -1,10 +1,11 @@
 # WalkLogger — 街歩きアーカイブ
 
-M5Stack CoreS3でGPS・写真を記録し、WindowsのWPFアプリにBLE転送して整理する個人用アーカイブです。
+M5Stack CoreS3またはAndroidでGPS・写真を記録し、WindowsのWPFアプリで整理する個人用アーカイブです。
 
 ## できること
 
 - CoreS3: UART GPSを5秒または10秒間隔でSDへ保存。内蔵カメラでJPEG撮影し、UTC時刻・座標を記録。
+- Android: .NET MAUIの記録端末。スマホのGPSとカメラで記録し、GPXまたは写真入りZIPを共有。
 - Windows: BLE転送／SDフォルダー／GPXから取り込み。OpenStreetMap + Leafletでルートと撮影地点を表示。
 - 写真と観察メモを編集。スマホなどのJPEGも撮影日時を確認してGPSへ紐付け。
 - GPX、要約、写真、ブログ草稿を保存。OneDriveの同期フォルダーも保存先に選択可能。
@@ -32,6 +33,12 @@ dotnet run --project src\WalkLogger.App\WalkLogger.App.csproj
 ```
 
 初回は「サンプルで試す」で画面を確認できます。サンプルは合成座標であり、実際の道に沿った歩行記録ではありません。年次集計から除外します。
+
+## Androidを記録端末にする
+
+CoreS3なしで、スマホのGPSとカメラを使用できます。Android 8.0以降が対象です。配布APKは`dist\android`、ソースは`src\WalkLogger.Android`です。[使い方・ビルド・継続記録の制約](src/WalkLogger.Android/README.md)を参照してください。Android版は記録用で、地名取得・AI草稿・過去比較・年次集計はWindows版で行います。
+
+「記録一覧」から写真入りZIPをOneDrive等へ共有し、Windowsで展開後「フォルダー取込」を選びます。OneDriveの自動同期・Microsoftアカウント連携は行いません。
 
 ## GPSの接続とファームウェア
 

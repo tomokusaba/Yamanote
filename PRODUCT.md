@@ -6,7 +6,7 @@
 
 adaptive
 
-Windows desktop (WPF) and M5Stack CoreS3 firmware. Not a mobile app.
+Windows desktop (WPF), Android recording terminal (.NET MAUI), and M5Stack CoreS3 firmware.
 
 ## Users
 
@@ -14,15 +14,16 @@ Windows desktop (WPF) and M5Stack CoreS3 firmware. Not a mobile app.
 
 ## Product Purpose
 
-CoreS3で位置と写真を記録し、WindowsにBLE転送して、地図・旅行記・過去比較・年次レポートとして保存する。
+CoreS3またはAndroidで位置と写真を記録し、Windowsで地図・旅行記・過去比較・年次レポートとして整理する。
 
 ## Operating Context
 
-屋外ではGPSとSDカードに記録。帰宅後にWindowsで整理。OneDriveはWindowsの同期フォルダーを利用する。
+屋外ではCoreS3のSDカード、またはAndroidのアプリ専用領域に記録。帰宅後にWindowsで整理。OneDriveはWindowsの同期フォルダー、Androidではユーザーが選ぶ共有先として利用する。
 
 ## Capabilities and Constraints
 
 - WindowsアプリはWPF。
+- AndroidはCoreS3の代わりになるGPS・写真記録端末。5秒／10秒間隔、位置情報フォアグラウンドサービス、GPX／写真入りZIPの共有に対応。AI・過去比較・年次集計はWindowsで行う。OneDriveへの自動同期は行わない。
 - CoreS3の内蔵カメラ、外付けUART GPS、SDカードを使用する。GPS型番は未指定なので配線・ボーレートを設定可能にする。
 - BLEでログと写真を取り込む。SDカードからの取り込みも用意する。
 - 地図はOpenStreetMap。ブログ生成はAzure OpenAI。
