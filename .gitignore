@@ -1,0 +1,10 @@
+bin/
+obj/
+.pio/
+.vs/
+dist/
+artifacts/
+.impeccable/questions/
+*.user
+*.part
+firmware/include/config.local.h

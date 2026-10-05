@@ -1,0 +1,235 @@
+<Window x:Class="WalkLogger.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="WalkLogger — 街歩きアーカイブ" Width="1460" Height="920" MinWidth="1080" MinHeight="700"
+        Loaded="Window_Loaded" Closing="Window_Closing">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolVisibility"/>
+    </Window.Resources>
+    <!-- THESIS: GPS, photos and observations remain linked; AI is an editable draft.
+         OWN-WORLD: survey desk, pale blue-gray, dark ink, restrained teal, native Japanese controls.
+         STORY: import, inspect evidence on a map, annotate, then generate and review a draft.
+         FIRST VIEWPORT: dated archive left, broad map center, observation pane right, import above.
+         FORM: user-approved map workspace, surveyed evidence staging, direction seed 80174cec. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="24,18">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="WalkLogger" FontSize="27" FontWeight="SemiBold"/>
+                    <TextBlock Text="歩いた道と、街の変化を残す。" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                </StackPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" x:Name="ImportActions" IsEnabled="{Binding Idle}">
+                    <Button Content="ログを開く" Command="{Binding ImportFileCommand}" ToolTip="GPXまたはCoreS3のtrack.ndjson"/>
+                    <Button Content="SDフォルダーを取り込む" Command="{Binding ImportFolderCommand}"/>
+                    <Button Content="BLEで取り込む" Style="{StaticResource Primary}" Command="{Binding ShowBleCommand}"/>
+                </WrapPanel>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="258"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Background="#EDF2F6" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+                <DockPanel Margin="18,22,12,16">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
+                        <TextBlock Text="街歩きの記録" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ArchiveCount" Text="{Binding ArchiveCount}" Foreground="{StaticResource Muted}" Margin="0,6,0,0"/>
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                        <Button Content="サンプルで試す" Command="{Binding DemoCommand}" HorizontalAlignment="Left"/>
+                        <TextBlock Text="サンプルは合成データです。&#10;年次集計には含めません。" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,8,0,0"/>
+                    </StackPanel>
+                    <ListBox x:Name="WalkList" Background="Transparent" BorderThickness="0" IsEnabled="{Binding Idle}"
+                             ItemsSource="{Binding Walks}" SelectedItem="{Binding Current, Mode=OneWay}"
+                             SelectionChanged="WalkList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="日付別の街歩き記録">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="10,12"/>
+                                <Setter Property="Margin" Value="0,0,0,4"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayDate}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                                    <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,5,0,4"/>
+                                    <TextBlock Text="{Binding DisplayStats}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+            <DockPanel Grid.Column="1" Margin="20,18,20,16">
+                <Border x:Name="BlePanel" DockPanel.Dock="Top" Visibility="{Binding BleVisible, Converter={StaticResource BoolVisibility}}" Background="#E4F1EF"
+                        BorderBrush="#BCD8D4" BorderThickness="1" Padding="14" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="CoreS3からBLE転送" FontSize="17" FontWeight="SemiBold"/>
+                        <TextBlock Text="CoreS3で記録をPAUSE → BLE ONにしてください。写真は転送に時間がかかります。" TextWrapping="Wrap" Margin="0,5,0,10"/>
+                        <WrapPanel x:Name="BleActions" IsEnabled="{Binding Idle}">
+                            <Button Content="機器を検索（8秒）" Command="{Binding ScanCommand}"/>
+                            <ComboBox x:Name="DeviceList" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MinWidth="260" Margin="0,0,10,0" AutomationProperties.Name="BLE機器"/>
+                            <Button Content="選択した機器から転送" Command="{Binding TransferCommand}" Style="{StaticResource Primary}"/>
+                            <Button Content="閉じる" Command="{Binding HideBleCommand}"/>
+                        </WrapPanel>
+                        <TextBlock Text="信頼できる場所で転送してください。BLEは暗号化されていません。記録はSDカードにも残ります。"
+                                   FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
+                <TabControl x:Name="MainTabs" IsEnabled="{Binding Idle}" Background="White" BorderBrush="{StaticResource Line}">
+                    <TabItem Header="地図と記録">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="300"/><ColumnDefinition Width="5"/><ColumnDefinition Width="322" MinWidth="260" MaxWidth="500"/></Grid.ColumnDefinitions>
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <StackPanel Margin="18,16,18,12">
+                                    <TextBlock x:Name="RouteHeading" Text="{Binding RouteHeading}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="RouteMetrics" Text="{Binding RouteMetrics}" Foreground="{StaticResource Muted}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <wv:WebView2 x:Name="MapView" Grid.Row="1" Margin="0,0,0,0" AutomationProperties.Name="OpenStreetMapの歩行ルート"/>
+                                <Border x:Name="EmptyMap" Grid.Row="1" Visibility="{Binding NoSession, Converter={StaticResource BoolVisibility}}" Background="#F1F5F7" Padding="28">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="410">
+                                        <TextBlock Text="歩いた道が、ここに残ります。" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock Text="GPSと写真を取り込むと、撮影した場所から観察メモまで一つの地図で見られます。"
+                                                   TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,14,0,22"/>
+                                        <Button Content="サンプルのルートを見る" Command="{Binding DemoCommand}" Style="{StaticResource Primary}" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Grid.Row="2" Text="実測区間のみを結びます。休止・60秒超の欠測・大きなGPS飛びは区切って表示します。"
+                                           FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="16,10"/>
+                            </Grid>
+                            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#E9EEF2"/>
+                            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="RecordEditor" IsEnabled="{Binding HasSession}" Margin="16">
+                                    <TextBlock Text="この日の記録" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                                    <TextBlock Text="タイトル"/><TextBox x:Name="TitleBox" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" Margin="0,5,0,12" AutomationProperties.Name="記録のタイトル"/>
+                                    <CheckBox x:Name="LoopBox" IsChecked="{Binding CompletedLoop}" Content="山手線の一周完了を確認した" ToolTip="GPSから自動判定しません。確認済み記録のみ一周タイムに集計します。"/>
+                                    <TextBlock Text="観察メモ" FontWeight="SemiBold" Margin="0,12,0,5"/>
+                                    <TextBox x:Name="NotesBox" Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" Height="140" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"
+                                             AutomationProperties.Name="観察メモ"/>
+                                    <TextBlock Text="気付いた街の変化、撮影理由など。AIはメモのない体験を創作しません。"
+                                               Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,10"/>
+                                    <Button Content="記録・メモを保存" Command="{Binding SaveCommand}" Style="{StaticResource Primary}" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="撮影した写真" FontSize="17" FontWeight="SemiBold" Margin="0,24,0,12"/>
+                                    <TextBlock x:Name="PhotoEmpty" Visibility="{Binding NoPhotos, Converter={StaticResource BoolVisibility}}" Text="写真はまだありません。" Foreground="{StaticResource Muted}"/>
+                                    <ItemsControl x:Name="PhotoList" ItemsSource="{Binding PhotoEditors}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,18">
+                                                    <Image Source="{Binding ImagePath}" Height="160" Stretch="Uniform" HorizontalAlignment="Left"/>
+                                                    <TextBlock Text="{Binding Caption}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,6,0,4"/>
+                                                    <TextBox Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalContentAlignment="Top"
+                                                             TextWrapping="Wrap" MinHeight="42" AutomationProperties.Name="写真の観察メモ"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="写真ファイルを追加" Command="{Binding AddPhotoCommand}" HorizontalAlignment="Left" ToolTip="EXIFの撮影時刻、または手入力時刻に最も近いGPS点へ紐付けます。"/>
+                                    <TextBlock Text="地名を付ける" FontSize="17" FontWeight="SemiBold" Margin="0,24,0,8"/>
+                                    <TextBlock Text="最大12地点をNominatimへ送信します。座標の外部送信を確認してから実行します。"
+                                               TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8"/>
+                                    <Button Content="ルートの地名を取得" Command="{Binding PlacesCommand}" HorizontalAlignment="Left"/>
+                                    <TextBlock x:Name="PlacesText" Text="{Binding PlacesText}" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource Muted}"/>
+                                    <WrapPanel Margin="0,24,0,0">
+                                        <Button Content="GPXを書き出す" Command="{Binding ExportGpxCommand}"/>
+                                        <Button Content="保存先を開く" Command="{Binding OpenArchiveCommand}"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="ブログ・過去比較">
+                        <Grid Margin="22">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="記録から、旅行記へ。" FontSize="24" FontWeight="SemiBold"/>
+                                <TextBlock Text="生成した本文は草稿です。公開前に事実・位置情報・写真を確認してください。"
+                                           Foreground="{StaticResource Muted}" Margin="0,8,0,18" TextWrapping="Wrap"/>
+                                <WrapPanel x:Name="BlogActions" IsEnabled="{Binding HasSession}">
+                                    <StackPanel Width="290" Margin="0,0,12,0">
+                                        <TextBlock Text="比較する過去の記録（任意）" Margin="0,0,0,5"/>
+                                        <ComboBox x:Name="PreviousList" ItemsSource="{Binding PreviousWalks}" SelectedItem="{Binding Previous}" DisplayMemberPath="DisplayTitle"
+                                                  AutomationProperties.Name="比較する過去の記録"/>
+                                    </StackPanel>
+                                    <Button Content="比較を解除" Command="{Binding ClearPreviousCommand}" VerticalAlignment="Bottom"/>
+                                    <Button Content="Azure OpenAIで草稿を生成" Command="{Binding GenerateCommand}" Style="{StaticResource Primary}" VerticalAlignment="Bottom"/>
+                                    <Button Content="草稿を保存" Command="{Binding SaveCommand}" VerticalAlignment="Bottom"/>
+                                    <Button Content="Markdownを書き出す" Command="{Binding ExportBlogCommand}" VerticalAlignment="Bottom"/>
+                                </WrapPanel>
+                                <CheckBox x:Name="SendPhotosBox" IsChecked="{Binding SendPhotos}" Content="今回の写真もAzureへ送信する（最大8枚 / 各4MBまで）"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ComparisonText" Grid.Row="1" Text="{Binding ComparisonText}"
+                                       TextWrapping="Wrap" Margin="0,8,0,14" Foreground="{StaticResource Muted}"/>
+                            <TextBox x:Name="BlogBox" Text="{Binding Blog, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding HasSession}" Grid.Row="2" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                     VerticalScrollBarVisibility="Auto" Padding="18" FontSize="15" AutomationProperties.Name="ブログ草稿（Markdown）"/>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="年次レポート">
+                        <Grid Margin="22">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel Margin="0,0,0,18">
+                                <TextBlock Text="積み重ねた、街歩き。" FontSize="24" FontWeight="SemiBold"/>
+                                <TextBlock Text="実記録のみを集計します。一周タイムは「一周完了」を確認した記録から算出します。"
+                                           Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,16"/>
+                                <WrapPanel x:Name="ReportActions">
+                                    <TextBlock Text="対象年" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBox x:Name="YearBox" Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}" Width="90" Margin="0,0,12,0" AutomationProperties.Name="年次レポートの対象年"/>
+                                    <Button Content="集計する" Command="{Binding ReportCommand}" Style="{StaticResource Primary}"/>
+                                    <Button Content="Markdownを書き出す" Command="{Binding ExportReportCommand}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                            <TextBox x:Name="ReportBox" Text="{Binding Report, Mode=OneWay}" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalContentAlignment="Top"
+                                     VerticalScrollBarVisibility="Auto" Padding="18" FontSize="15" AutomationProperties.Name="年次レポート"/>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="設定">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SettingsEditor" Margin="28" MaxWidth="760" HorizontalAlignment="Left">
+                                <TextBlock Text="保存と外部サービス" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20"/>
+                                <TextBlock Text="アーカイブ保存先" FontWeight="SemiBold"/>
+                                <DockPanel Margin="0,6,0,6">
+                                    <Button DockPanel.Dock="Right" Content="フォルダーを選択" Command="{Binding ChooseArchiveCommand}" Margin="10,0,0,0"/>
+                                    <TextBox x:Name="ArchiveRootBox" Text="{Binding ArchiveRoot, UpdateSourceTrigger=PropertyChanged}" MinWidth="380" AutomationProperties.Name="アーカイブ保存先"/>
+                                </DockPanel>
+                                <TextBlock Text="OneDriveの同期フォルダー内を選ぶと、GPX・写真・草稿も同期されます。同期完了はOneDrive側で確認してください。保存先を変更しても旧記録は自動移動しません。"
+                                           TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12"/>
+                                <TextBlock Text="Azure OpenAI" FontSize="18" FontWeight="SemiBold" Margin="0,28,0,12"/>
+                                <TextBlock Text="リソースURL（https://リソース名.openai.azure.com/）"/>
+                                <TextBox x:Name="EndpointBox" Text="{Binding Endpoint, UpdateSourceTrigger=PropertyChanged}" Margin="0,6,0,14" AutomationProperties.Name="Azure OpenAIのリソースURL"/>
+                                <TextBlock Text="デプロイ名（モデル名ではなくAzureで設定した名前）"/>
+                                <TextBox x:Name="DeploymentBox" Text="{Binding Deployment, UpdateSourceTrigger=PropertyChanged}" Margin="0,6,0,14" AutomationProperties.Name="Azure OpenAIのデプロイ名"/>
+                                <TextBlock Text="APIキー"/>
+                                <PasswordBox x:Name="ApiKeyBox" PasswordChanged="ApiKeyBox_PasswordChanged" Padding="8" Margin="0,6,0,8" AutomationProperties.Name="Azure OpenAIのAPIキー"/>
+                                <TextBlock Text="キーは現在のWindowsユーザーのDPAPIで暗号化し、ローカルに保存します。OneDriveには保存しません。空欄で保存するとキーを削除します。"
+                                           Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12"/>
+                                <TextBlock Text="地名取得の連絡先メールアドレス" FontWeight="SemiBold" Margin="0,28,0,6"/>
+                                <TextBox x:Name="ContactBox" Text="{Binding Contact, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Nominatimの利用者連絡先"/>
+                                <TextBlock Text="Nominatimの利用ポリシーに従い、連絡先付きのUser-Agent、1秒以上の間隔、地点キャッシュを使用します。"
+                                           Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,22"/>
+                                <Button Content="設定を保存" Style="{StaticResource Primary}" Command="{Binding SettingsSaveCommand}" HorizontalAlignment="Left"/>
+                                <TextBlock Text="外部送信について" FontSize="18" FontWeight="SemiBold" Margin="0,28,0,10"/>
+                                <TextBlock Text="地図表示では表示範囲のタイル要求がOpenStreetMapへ送信されます。地名取得では代表座標がNominatimへ、草稿生成では要約・メモと選択した写真がAzureへ送信されます。自動送信・自動公開はしません。"
+                                           TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </Grid>
+        <Border Grid.Row="2" Background="#192C3B" Padding="20,9">
+            <DockPanel>
+                <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="処理をキャンセル" Visibility="{Binding Busy, Converter={StaticResource BoolVisibility}}" Command="{Binding CancelCommand}" MinHeight="28" Padding="12,3"/>
+                <ProgressBar x:Name="BusyBar" DockPanel.Dock="Right" Width="80" Height="5" Margin="12,0" IsIndeterminate="True" Visibility="{Binding Busy, Converter={StaticResource BoolVisibility}}"/>
+                <TextBlock x:Name="StatusText" Text="{Binding Status}" Foreground="White" VerticalAlignment="Center" TextWrapping="Wrap"
+                           AutomationProperties.LiveSetting="Polite"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

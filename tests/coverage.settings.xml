@@ -1,0 +1,22 @@
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*[\\/]WalkLogger\.(App|Domain|Application|Presentation|Infrastructure|Infrastructure\.Windows|Core)\.dll$</ModulePath>
+      </Include>
+      <IncludeDirectories>
+        <Directory>src\WalkLogger.App\bin\Debug\net10.0-windows10.0.19041.0</Directory>
+        <Directory>tests\WalkLogger.Tests\bin\Debug\net10.0</Directory>
+        <Directory>tests\WalkLogger.Windows.Tests\bin\Debug\net10.0-windows10.0.19041.0</Directory>
+      </IncludeDirectories>
+    </ModulePaths>
+    <Sources>
+      <Exclude>
+        <Source>.*[\\/]obj[\\/].*</Source>
+        <Source>.*\.g\.cs$</Source>
+      </Exclude>
+    </Sources>
+    <EnableStaticManagedInstrumentation>True</EnableStaticManagedInstrumentation>
+    <EnableDynamicManagedInstrumentation>True</EnableDynamicManagedInstrumentation>
+  </CodeCoverage>
+</Configuration>

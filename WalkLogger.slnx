@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WalkLogger.App/WalkLogger.App.csproj" />
+    <Project Path="src/WalkLogger.Application/WalkLogger.Application.csproj" />
+    <Project Path="src/WalkLogger.Core/WalkLogger.Core.csproj" />
+    <Project Path="src/WalkLogger.Domain/WalkLogger.Domain.csproj" />
+    <Project Path="src/WalkLogger.Infrastructure.Windows/WalkLogger.Infrastructure.Windows.csproj" />
+    <Project Path="src/WalkLogger.Infrastructure/WalkLogger.Infrastructure.csproj" />
+    <Project Path="src/WalkLogger.Presentation/WalkLogger.Presentation.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WalkLogger.Tests/WalkLogger.Tests.csproj" />
+    <Project Path="tests/WalkLogger.Windows.Tests/WalkLogger.Windows.Tests.csproj" />
+  </Folder>
+</Solution>

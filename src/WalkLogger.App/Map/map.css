@@ -1,0 +1,7 @@
+html, body, #map { height: 100%; margin: 0; }
+body { font: 14px "Yu Gothic UI", "Segoe UI", sans-serif; color: #192c3b; background: #f1f5f7; }
+#notice { position: absolute; bottom: 32px; left: 12px; right: 12px; z-index: 1000; padding: 10px 14px; background: #fff; border: 1px solid #d8e1e7; color: #8c3125; }
+.leaflet-popup-content { max-width: 260px; line-height: 1.6; }
+.leaflet-popup-content img { width: 240px; max-height: 200px; object-fit: contain; display: block; margin-top: 8px; }
+.leaflet-control-attribution { font-size: 11px; }
+a { color: #00665f; }

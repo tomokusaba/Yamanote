@@ -1,0 +1,14 @@
+<Window x:Class="WalkLogger.App.PhotoTimeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="写真の撮影時刻" Width="510" Height="330" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="26">
+        <TextBlock Text="撮影時刻を確認" FontSize="22" FontWeight="SemiBold"/>
+        <TextBlock Text="EXIFに時差がない場合、PCの現地時刻として扱います。時差を含む日時を確認してください。最寄りのGPS点（60秒以内）に結びます。"
+                   TextWrapping="Wrap" Margin="0,10,0,18"/>
+        <TextBlock Text="日時とUTCオフセット"/>
+        <TextBox x:Name="TimeBox" Margin="0,6,0,12" AutomationProperties.Name="撮影日時（UTCオフセット付き）"/>
+        <TextBlock x:Name="ErrorText" Foreground="#9B3328" TextWrapping="Wrap" Margin="0,0,0,12"/>
+        <Button Content="この時刻で写真を追加" Click="Confirm_Click" Style="{StaticResource Primary}" HorizontalAlignment="Left" IsDefault="True"/>
+    </StackPanel>
+</Window>

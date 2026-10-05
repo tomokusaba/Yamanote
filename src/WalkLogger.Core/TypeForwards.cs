@@ -1,0 +1,19 @@
+using System.Runtime.CompilerServices;
+using WalkLogger.Core;
+
+[assembly: TypeForwardedTo(typeof(TrackPoint))]
+[assembly: TypeForwardedTo(typeof(PhotoRecord))]
+[assembly: TypeForwardedTo(typeof(PlaceLabel))]
+[assembly: TypeForwardedTo(typeof(WalkSession))]
+[assembly: TypeForwardedTo(typeof(WalkStats))]
+[assembly: TypeForwardedTo(typeof(WalkAnalysis))]
+[assembly: TypeForwardedTo(typeof(Crc32))]
+[assembly: TypeForwardedTo(typeof(RemoteFile))]
+[assembly: TypeForwardedTo(typeof(TransferMetadata))]
+[assembly: TypeForwardedTo(typeof(BleProtocol))]
+[assembly: TypeForwardedTo(typeof(ArchiveStore))]
+[assembly: TypeForwardedTo(typeof(TrackImporter))]
+[assembly: TypeForwardedTo(typeof(AzureBlogService))]
+[assembly: TypeForwardedTo(typeof(PlaceService))]
+[assembly: TypeForwardedTo(typeof(Json))]
+[assembly: TypeForwardedTo(typeof(UtcTimestampConverter))]
