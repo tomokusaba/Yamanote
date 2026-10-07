@@ -377,18 +377,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public async Task GenerateAsync()
     {
-        if (Current is null) return;
+        if (Current is not { } current) return;
         var selected = Previous;
         var includePhotos = SendPhotos;
+        var missingPlaces = new[] { current, selected }.OfType<WalkSession>()
+            .Where(w => w.Places.Count == 0).Distinct().ToArray();
         if (!string.IsNullOrWhiteSpace(Blog) && !dialogs.Confirm(
                 "現在の草稿を生成結果で置き換えます。続けますか？", "草稿の置き換え")) return;
-        if (!dialogs.Confirm("今回のルート要約・観察メモ" + (selected is null ? "" : "・過去の記録要約") +
+        if (missingPlaces.Length > 0 && !dialogs.Confirm(
+                $"地名が未取得の記録{missingPlaces.Length}件から、最大12地点ずつの代表座標と設定済みの連絡先メールアドレスをNominatim（OpenStreetMapの地名サービス）へ送信します（キャッシュ済みの地点は再送しません）。\n" +
+                "取得した近傍地名をルートの順に並べ、ブログの資料に使います。取得に失敗した場合はブログ生成を中止します。\n地名を取得して草稿を生成しますか？",
+                "ブログ用の地名取得")) return;
+        if (!dialogs.Confirm("今回のルートの代表座標・地名・観察メモ" + (selected is null ? "" : "・過去の記録の代表座標・地名・要約") +
                 (includePhotos ? "・今回の写真" : "") + "を、設定済みのAzure OpenAIに送信します。\nAPI利用料金が発生することがあります。続けますか？",
                 "Azureへの送信確認")) return;
-        await RunAsync("Azure OpenAIが草稿を生成しています…", async ct =>
+        await RunAsync("ブログ生成の資料を準備しています…", async ct =>
         {
             await SaveCurrentAsync(ct);
-            await enrichment.GenerateBlogAsync(store, Current, selected, settings, includePhotos,
+            foreach (var walk in missingPlaces)
+            {
+                Status = $"ブログ用の地名を取得しています（1記録につき最大12地点）: {walk.DisplayTitle}";
+                await enrichment.ResolvePlacesAsync(store, walk, settings.NominatimContact, ct);
+            }
+            if (missingPlaces.Length > 0)
+            {
+                Notify(nameof(PlacesText));
+                RefreshMap();
+            }
+            ct.ThrowIfCancellationRequested();
+            Status = "Azure OpenAIがルートの地名を使って草稿を生成しています…";
+            await enrichment.GenerateBlogAsync(store, current, selected, settings, includePhotos,
                 new InlineProgress<string>(text => { Blog = text; Notify(nameof(Blog)); }), ct);
             Status = "AI草稿を保存しました。事実・推測・公開してよい位置情報を確認してください。";
         });

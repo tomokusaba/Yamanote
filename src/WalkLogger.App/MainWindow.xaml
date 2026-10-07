@@ -150,6 +150,8 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="記録から、旅行記へ。" FontSize="24" FontWeight="SemiBold"/>
+                                <TextBlock Text="地名が未取得なら、送信確認後に地名を取得し、ルートの順に本文へ織り込みます。地名取得には「設定」の連絡先メールアドレスが必要です。"
+                                           Foreground="{StaticResource Muted}" Margin="0,8,0,0" TextWrapping="Wrap"/>
                                 <TextBlock Text="生成した本文は草稿です。公開前に事実・位置情報・写真を確認してください。"
                                            Foreground="{StaticResource Muted}" Margin="0,8,0,18" TextWrapping="Wrap"/>
                                 <WrapPanel x:Name="BlogActions" IsEnabled="{Binding HasSession}">

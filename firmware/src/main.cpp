@@ -7,8 +7,11 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <esp_camera.h>
+#include <esp_heap_caps.h>
 #include <vector>
 #include "protocol.h"
+#include "gps_diagnostics.h"
+#include "touch_control.h"
 
 #if __has_include("config.local.h")
 #include "config.local.h"
@@ -19,17 +22,31 @@ static_assert(LOG_INTERVAL_SECONDS == 5 || LOG_INTERVAL_SECONDS == 10, "Use a 5 
 TinyGPSPlus gps;
 HardwareSerial gpsSerial(1);
 SemaphoreHandle_t sdMutex;
+GpsDiagnostics gpsDiagnostics(sdMutex);
+volatile uint32_t uartErrors = 0;
+volatile uint32_t lastUartError = 0;
+uint32_t lastDiagnosticMillis = 0;
+GpsState lastGpsState = GpsState::NoUart;
 BLECharacteristic *metaChar;
 BLECharacteristic *dataChar;
 BLEServer *bleServer;
 bool sdReady = false;
 bool cameraReady = false;
+String cameraStatus = "Not initialized";
 bool recording = false;
 volatile bool syncEnabled = false;
 volatile bool connected = false;
 uint32_t syncStarted = 0;
 uint32_t lastLogMillis = 0;
 uint32_t lastDrawMillis = 0;
+uint32_t touchPresses = 0;
+uint32_t lastTouchMillis = 0;
+int touchX = -1;
+int touchY = -1;
+int touchRawX = -1;
+int touchRawY = -1;
+const char *lastControl = "NONE";
+bool messageIsError = false;
 uint32_t pointCount = 0;
 uint32_t photoCount = 0;
 uint32_t segment = 0;
@@ -43,12 +60,6 @@ bool transferCatalog = false;
 uint32_t transferSize = 0;
 uint32_t transferOffset = 0;
 
-class SdLock {
-public:
-    SdLock() { xSemaphoreTake(sdMutex, portMAX_DELAY); }
-    ~SdLock() { xSemaphoreGive(sdMutex); }
-};
-
 uint32_t crcUpdate(uint32_t crc, const uint8_t *data, size_t size) {
     for (size_t i = 0; i < size; ++i) {
         crc ^= data[i];
@@ -58,11 +69,7 @@ uint32_t crcUpdate(uint32_t crc, const uint8_t *data, size_t size) {
 }
 
 bool goodFix() {
-    return gps.location.isValid() && gps.location.age() < 2000 &&
-           gps.date.isValid() && gps.date.age() < 2000 && gps.date.year() >= 2024 &&
-           gps.time.isValid() && gps.time.age() < 2000 &&
-           gps.satellites.isValid() && gps.satellites.value() >= 4 &&
-           gps.hdop.isValid() && gps.hdop.value() <= 500;
+    return gpsState(gpsDiagnostics.snapshot(gps)) == GpsState::Ready;
 }
 
 String timestamp() {
@@ -75,7 +82,22 @@ String timestamp() {
 
 void fail(const String &text) {
     message = text;
-    Serial.println("ERROR: " + text);
+    messageIsError = true;
+    gpsDiagnostics.noteError(text);
+    if (Serial) Serial.println("ERROR: " + text);
+}
+
+void reportGps(const char *event) {
+    GpsRuntime runtime = {
+        event, recording ? "recording" : (syncEnabled ? "ble_sync" : "paused"),
+        pointCount, photoCount, segment, sessionFolder.c_str(), message.c_str(),
+        cameraReady, cameraStatus.c_str(), uartErrors, lastUartError,
+        GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD, LOG_INTERVAL_SECONDS,
+        CoreS3.Touch.isEnabled(), touchPresses, lastTouchMillis,
+        touchX, touchY, touchRawX, touchRawY, lastControl
+    };
+    gpsDiagnostics.report(gps, runtime);
+    lastDiagnosticMillis = millis();
 }
 
 bool appendRecord(const String &path, JsonDocument &doc) {
@@ -118,8 +140,9 @@ bool prepareSession() {
 }
 
 void logPoint() {
+    messageIsError = false;
     if (!goodFix()) {
-        message = "GPS missing / weak; not logging";
+        message = String("Not logging: ") + gpsStateText(gpsState(gpsDiagnostics.snapshot(gps)));
         return;
     }
     String now = timestamp();
@@ -127,7 +150,7 @@ void logPoint() {
         message = "GPS UTC not advancing";
         return;
     }
-    SdLock lock;
+    SdLock lock(sdMutex);
     if (!prepareSession()) { recording = false; return; }
     StaticJsonDocument<256> doc;
     doc["time"] = now;
@@ -161,7 +184,7 @@ void takePhoto() {
         fail("JPEG conversion failed");
         return;
     }
-    SdLock lock;
+    SdLock lock(sdMutex);
     char filename[32];
     snprintf(filename, sizeof(filename), "IMG_%06lu.jpg", static_cast<unsigned long>(photoCount + 1));
     String path = sessionFolder + "/" + filename;
@@ -232,7 +255,7 @@ bool buildCatalog() {
 
 class CommandCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *characteristic) override {
-        SdLock lock;
+        SdLock lock(sdMutex);
         if (!syncEnabled || recording) { reply(false, "Enable BLE while paused"); return; }
         std::string bytes = characteristic->getValue();
         String command(bytes.c_str());
@@ -300,22 +323,68 @@ class ServerCallbacks : public BLEServerCallbacks {
     }
 };
 
+void initializeCamera() {
+    Serial.printf("[camera] PSRAM found=%d total=%lu free=%lu largest=%lu; internal free=%lu largest=%lu\n",
+        psramFound(), static_cast<unsigned long>(ESP.getPsramSize()),
+        static_cast<unsigned long>(ESP.getFreePsram()), static_cast<unsigned long>(ESP.getMaxAllocPsram()),
+        static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+    if (!psramFound() || ESP.getPsramSize() == 0) {
+        cameraStatus = "PSRAM unavailable";
+        fail("Camera needs PSRAM; see startup log");
+        return;
+    }
+    cameraReady = CoreS3.Camera.begin();
+    if (!cameraReady) {
+        cameraStatus = "Init failed";
+        fail("Camera init failed; GPS still usable");
+        return;
+    }
+    if (!CoreS3.Camera.get()) {
+        cameraReady = false;
+        cameraStatus = "Capture failed";
+        fail("Camera frame test failed; GPS still usable");
+        return;
+    }
+    Serial.printf("[camera] Frame OK: %ux%u format=%d bytes=%lu\n",
+        static_cast<unsigned int>(CoreS3.Camera.fb->width), static_cast<unsigned int>(CoreS3.Camera.fb->height),
+        CoreS3.Camera.fb->format, static_cast<unsigned long>(CoreS3.Camera.fb->len));
+    CoreS3.Camera.free();
+    cameraStatus = "Ready";
+}
+
 void setup() {
+    Serial.begin(115200);
+    uint32_t serialStarted = millis();
+    while (!Serial && millis() - serialStarted < 3000) delay(10);
     auto cfg = M5.config();
+    cfg.serial_baudrate = 115200;
     CoreS3.begin(cfg);
+    Serial.printf("[boot] WalkLogger gps-touch-20261007-115200; board=%u GPS baud=%u\n",
+        static_cast<unsigned int>(M5.getBoard()), static_cast<unsigned int>(GPS_BAUD));
     CoreS3.Display.setRotation(1);
     CoreS3.Display.setTextSize(1);
     CoreS3.Display.setTextColor(WHITE, BLACK);
     sdMutex = xSemaphoreCreateMutex();
+    if (sdMutex == nullptr) {
+        fail("SD mutex allocation failed");
+        return;
+    }
     SPI.begin(36, 35, 37, 4);
     sdReady = SD.begin(4, SPI, 25000000);
     if (!sdReady || SD.cardType() == CARD_NONE || (!SD.exists("/walks") && !SD.mkdir("/walks"))) {
         sdReady = false;
         fail("Insert FAT32 SD card and restart");
     }
-    cameraReady = CoreS3.Camera.begin();
-    if (!cameraReady) fail("Camera init failed; GPS still usable");
+    gpsDiagnostics.begin(sdReady);
+    initializeCamera();
+    if (gpsSerial.setRxBufferSize(2048) != 2048) fail("GPS RX buffer configuration failed");
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    if (!gpsSerial) fail("GPS UART initialization failed");
+    gpsSerial.onReceiveError([](hardwareSerial_error_t error) {
+        ++uartErrors;
+        lastUartError = static_cast<uint32_t>(error);
+    });
     BLEDevice::init("WalkLogger-CoreS3");
     BLEDevice::setMTU(247);
     bleServer = BLEDevice::createServer();
@@ -330,6 +399,7 @@ void setup() {
     auto advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(WALK_SERVICE_UUID);
     advertising->setScanResponse(true);
+    reportGps("boot");
 }
 
 void draw() {
@@ -338,14 +408,51 @@ void draw() {
     CoreS3.Display.setTextSize(2);
     CoreS3.Display.println("WalkLogger");
     CoreS3.Display.setTextSize(1);
-    CoreS3.Display.printf("\nGPS %s   SAT %lu   HDOP %.1f\n", goodFix() ? "FIX" : "WAIT",
-        static_cast<unsigned long>(gps.satellites.value()), gps.hdop.hdop());
-    CoreS3.Display.printf("Mode: %s   Points %lu   Photos %lu\n", recording ? "RECORD" : (syncEnabled ? "BLE SYNC" : "PAUSED"),
+    const auto state = gpsState(gpsDiagnostics.snapshot(gps));
+    CoreS3.Display.setTextColor(state == GpsState::Ready ? GREEN : YELLOW, BLACK);
+    CoreS3.Display.setCursor(10, 36);
+    CoreS3.Display.printf("GPS: %s   RX: %lu", gpsStateText(state), static_cast<unsigned long>(gps.charsProcessed()));
+    CoreS3.Display.setTextColor(WHITE, BLACK);
+    CoreS3.Display.setCursor(10, 48);
+    CoreS3.Display.printf("NMEA OK:%lu BAD:%lu UARTerr:%lu",
+        static_cast<unsigned long>(gps.passedChecksum()), static_cast<unsigned long>(gps.failedChecksum()),
+        static_cast<unsigned long>(uartErrors));
+    CoreS3.Display.setCursor(10, 60);
+    CoreS3.Display.printf("SAT:%s HDOP:%s  RX%d TX%d %dbaud",
+        gps.satellites.isValid() ? String(gps.satellites.value()).c_str() : "--",
+        gps.hdop.isValid() ? String(gps.hdop.hdop(), 1).c_str() : "--",
+        GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD);
+    CoreS3.Display.setCursor(10, 72);
+    CoreS3.Display.printf("Mode: %s   Points %lu   Photos %lu", recording ? "RECORD" : (syncEnabled ? "BLE SYNC" : "PAUSED"),
         static_cast<unsigned long>(pointCount), static_cast<unsigned long>(photoCount));
-    CoreS3.Display.printf("Battery: %d%%  Interval: %ds\n", CoreS3.Power.getBatteryLevel(), LOG_INTERVAL_SECONDS);
-    if (goodFix()) CoreS3.Display.printf("%.6f, %.6f\nUTC %s\n", gps.location.lat(), gps.location.lng(), timestamp().c_str());
-    CoreS3.Display.printf("\n%s\n", message.c_str());
-    CoreS3.Display.printf("BLE: %s (30 minute window)\n", connected ? "connected" : (syncEnabled ? "visible" : "off"));
+    CoreS3.Display.setCursor(10, 84);
+    CoreS3.Display.printf("Battery: %d%%  Interval: %ds  BLE:%s", CoreS3.Power.getBatteryLevel(), LOG_INTERVAL_SECONDS,
+        connected ? "connected" : (syncEnabled ? "visible" : "off"));
+    CoreS3.Display.setCursor(10, 96);
+    CoreS3.Display.printf("Camera: %s  SD:%s DIAG:%s", cameraStatus.c_str(),
+        sdReady ? "OK" : "ERR", gpsDiagnostics.ready() ? "OK" : "ERR");
+    CoreS3.Display.setCursor(10, 108);
+    if (!gpsDiagnostics.error().isEmpty()) {
+        CoreS3.Display.setTextColor(RED, BLACK);
+        CoreS3.Display.print(gpsDiagnostics.error().substring(0, 49));
+        CoreS3.Display.setTextColor(WHITE, BLACK);
+    } else if (gpsDiagnostics.ready()) {
+        CoreS3.Display.printf("Logs: %s", gpsDiagnostics.folder().c_str());
+    }
+    if (goodFix()) {
+        CoreS3.Display.setCursor(10, 120);
+        CoreS3.Display.printf("%.6f, %.6f", gps.location.lat(), gps.location.lng());
+        CoreS3.Display.setCursor(10, 132);
+        CoreS3.Display.printf("UTC %s", timestamp().c_str());
+    }
+    CoreS3.Display.setCursor(10, 144);
+    CoreS3.Display.printf("Touch:%lu %s (%d,%d)", static_cast<unsigned long>(touchPresses), lastControl, touchX, touchY);
+    CoreS3.Display.setCursor(10, 156);
+    CoreS3.Display.setTextSize(2);
+    CoreS3.Display.setTextColor(messageIsError ? RED : WHITE, BLACK);
+    CoreS3.Display.print(message.substring(0, 49));
+    CoreS3.Display.setTextSize(1);
+    CoreS3.Display.setTextColor(WHITE, BLACK);
     const char *labels[] = {recording ? "PAUSE" : "START", "PHOTO", "NEW", syncEnabled ? "BLE OFF" : "BLE ON"};
     for (int i = 0; i < 4; ++i) {
         CoreS3.Display.drawRect(i * 80, 190, 80, 48, syncEnabled && i == 3 ? GREEN : WHITE);
@@ -355,15 +462,32 @@ void draw() {
 
 void loop() {
     CoreS3.update();
-    while (gpsSerial.available()) gps.encode(gpsSerial.read());
+    M5.Power.setBatteryCharge(true);
+    while (gpsSerial.available()) {
+        int received = gpsSerial.read();
+        if (received < 0) break;
+        gps.encode(static_cast<char>(received));
+        gpsDiagnostics.received(static_cast<uint8_t>(received));
+    }
     if (CoreS3.Touch.getCount()) {
         auto touch = CoreS3.Touch.getDetail();
-        if (touch.wasPressed() && touch.y >= 190) {
-            int action = touch.x / 80;
+        if (touch.wasPressed()) {
+            ++touchPresses;
+            lastTouchMillis = millis();
+            touchX = touch.x;
+            touchY = touch.y;
+            auto raw = CoreS3.Touch.getTouchPointRaw();
+            touchRawX = raw.x;
+            touchRawY = raw.y;
+            int action = controlAt(touch.x, touch.y);
+            const char *controls[] = {recording ? "PAUSE" : "START", "PHOTO", "NEW", syncEnabled ? "BLE OFF" : "BLE ON"};
+            lastControl = action < 0 ? "OUTSIDE" : controls[action];
+            if (action >= 0) messageIsError = false;
             if (action == 0) {
                 if (syncEnabled) fail("Turn BLE off before recording");
                 else if (!sdReady) fail("SD unavailable");
-                else if (!recording && !goodFix()) fail("Wait outdoors for GPS UTC fix");
+                else if (!recording && !goodFix())
+                    fail(String("Cannot start: ") + gpsStateText(gpsState(gpsDiagnostics.snapshot(gps))));
                 else {
                     recording = !recording;
                     if (recording) { ++segment; lastLogMillis = millis() - LOG_INTERVAL_SECONDS * 1000; }
@@ -377,7 +501,7 @@ void loop() {
             } else if (action == 3) {
                 if (recording || !sdReady) fail("Pause recording before BLE sync");
                 else {
-                    SdLock lock;
+                    SdLock lock(sdMutex);
                     syncEnabled = !syncEnabled;
                     if (syncEnabled) { syncStarted = millis(); BLEDevice::startAdvertising(); message = "BLE visible; use trusted PC"; }
                     else {
@@ -389,21 +513,31 @@ void loop() {
                     }
                 }
             }
+            lastDrawMillis = millis();
+            draw();
+            reportGps(action < 0 ? "touch" : "control");
         }
     }
     if (syncEnabled && millis() - syncStarted >= 30UL * 60 * 1000) {
-        SdLock lock;
+        SdLock lock(sdMutex);
         syncEnabled = false;
         BLEDevice::stopAdvertising();
         if (connected) bleServer->disconnect(bleServer->getConnId());
         transferFile.close();
         transferCatalog = false;
         message = "BLE window expired; enable again";
+        messageIsError = false;
     }
     if (recording && millis() - lastLogMillis >= LOG_INTERVAL_SECONDS * 1000) {
         lastLogMillis = millis();
         logPoint();
     }
-    if (millis() - lastDrawMillis >= 1000) { lastDrawMillis = millis(); draw(); }
+    const auto currentGpsState = gpsState(gpsDiagnostics.snapshot(gps));
+    if (currentGpsState != lastGpsState || millis() - lastDiagnosticMillis >= 5000) {
+        const bool changed = currentGpsState != lastGpsState;
+        lastGpsState = currentGpsState;
+        reportGps(changed ? "gps_state_changed" : "status");
+    }
+    if (millis() - lastDrawMillis >= 3000) { lastDrawMillis = millis(); draw(); }
     delay(5);
 }

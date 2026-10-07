@@ -136,6 +136,7 @@ try
     await ArchitectureChecks.RunAsync(repo, Check);
     await WorkspaceChecks.RunAsync(Check);
     await InfrastructureChecks.RunAsync(folder, Check);
+    await BlogPromptChecks.RunAsync(folder, Check);
     using (var persisted = JsonDocument.Parse(JsonSerializer.Serialize(first, Json.Options)))
     {
         Check(!persisted.RootElement.TryGetProperty("stats", out _) &&
@@ -175,11 +176,14 @@ sealed class StaticHandler(string body) : HttpMessageHandler
 
 sealed class FakeHandler : HttpMessageHandler
 {
+    public string RequestBody { get; private set; } = "";
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (request.RequestUri?.AbsolutePath != "/openai/v1/chat/completions" || !request.Headers.Contains("api-key"))
             throw new Exception("Wrong Azure API request");
         var body = await request.Content!.ReadAsStringAsync(ct);
+        RequestBody = body;
         using var document = JsonDocument.Parse(body);
         if (document.RootElement.GetProperty("model").GetString() != "test" || !body.Contains("max_completion_tokens"))
             throw new Exception("Wrong request body");

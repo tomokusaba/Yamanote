@@ -137,11 +137,17 @@ internal static class WorkspaceChecks
         model.SendPhotos = true;
         await model.GenerateAsync();
         check(ports.BlogCalls == 1 && ports.LastPrevious == model.Previous && ports.LastIncludePhotos &&
-              model.Blog == "generated" && ports.Initial.Saves == 2 && model.Current!.Blog == "generated",
-            "Blog generation preserves selected comparison, photo opt-in and save order");
+              model.Blog == "generated" && ports.Initial.Saves == 4 && model.Current!.Blog == "generated" &&
+              ports.PlaceCalls == 2 && model.PlacesText == "test place" &&
+              ports.EnrichmentEvents.SequenceEqual(new[]
+              {
+                  "save:current", "places:current", "save:current", "places:previous", "save:previous", "blog", "save:current"
+              }),
+            "Blog generation resolves and persists both routes before Azure, preserving comparison and photo opt-in");
         ports = new();
         model = ports.Model();
         await model.InitializeAsync();
+        model.Current!.Places.Add(new(35, 139, "already resolved"));
         ports.Initial.SaveFailureAt = 2;
         await model.GenerateAsync();
         check(model.Blog == "generated" && model.Current!.Blog == "generated" && ports.Errors.Count == 1,
@@ -152,6 +158,74 @@ internal static class WorkspaceChecks
         await model.ResolvePlacesAsync();
         check(model.PlacesText == "test place" && ports.Initial.Saves == 2 &&
               model.Current!.Places.Count == 1, "Place command saves edits before resolving and persisting labels");
+
+        foreach (var title in new[] { "ブログ用の地名取得", "Azureへの送信確認", "草稿の置き換え" })
+        {
+            ports = new() { DeclinedConfirmation = title };
+            model = ports.Model();
+            await model.InitializeAsync();
+            model.Blog = title == "草稿の置き換え" ? "edited draft" : "";
+            await model.GenerateAsync();
+            check(ports.PlaceCalls == 0 && ports.BlogCalls == 0 && ports.Initial.Saves == 0 &&
+                  ports.Confirmations.Last().Title == title,
+                "Declining " + title + " prevents geocoding, Azure and draft overwrite");
+        }
+        ports = new();
+        model = ports.Model();
+        await model.InitializeAsync();
+        model.Previous = model.PreviousWalks[0];
+        model.Current!.Places.Add(new(35, 139, "current district"));
+        model.Previous.Places.Add(new(35, 139, "past district"));
+        await model.GenerateAsync();
+        check(ports.PlaceCalls == 0 && ports.BlogCalls == 1 && ports.Initial.Saves == 2 &&
+              ports.Confirmations.Count == 1 && ports.Confirmations[0].Title == "Azureへの送信確認" &&
+              ports.Confirmations[0].Text.Contains("代表座標・地名"),
+            "Resolved current and past routes are reused without new Nominatim consent or lookup");
+        ports = new();
+        model = ports.Model();
+        await model.InitializeAsync();
+        model.Previous = model.PreviousWalks[0];
+        model.Current!.Places.Add(new(35, 139, "current district"));
+        await model.GenerateAsync();
+        check(ports.PlaceCalls == 1 && ports.BlogCalls == 1 &&
+              ports.EnrichmentEvents.Contains("places:previous") &&
+              !ports.EnrichmentEvents.Contains("places:current") &&
+              ports.Confirmations[0].Text.Contains("記録1件") &&
+              ports.Confirmations[0].Text.Contains("連絡先メールアドレス") &&
+              ports.Confirmations[0].Text.Contains("キャッシュ済み"),
+            "Only an unresolved comparison route is looked up with explicit coordinate and contact consent");
+        foreach (var failureAt in new[] { 1, 2 })
+        {
+            ports = new() { PlaceFailureAt = failureAt };
+            model = ports.Model();
+            await model.InitializeAsync();
+            model.Previous = model.PreviousWalks[0];
+            await model.GenerateAsync();
+            check(ports.PlaceCalls == failureAt && ports.BlogCalls == 0 && model.Blog == "" &&
+                  ports.Errors.Single().Contains("Nominatim lookup failed") && model.Idle,
+                "Current or comparison geocoding failure aborts Azure without a success-shaped fallback");
+        }
+        ports = new();
+        model = ports.Model();
+        await model.InitializeAsync();
+        ports.Initial.SaveFailureAt = 2;
+        await model.GenerateAsync();
+        check(ports.PlaceCalls == 1 && ports.BlogCalls == 0 && model.Blog == "" &&
+              ports.Errors.Single().Contains("Save failed"),
+            "Failure to persist automatically resolved places aborts Azure generation");
+        gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ports = new() { PlaceGate = gate, PlaceGateAt = 2 };
+        model = ports.Model();
+        await model.InitializeAsync();
+        model.Previous = model.PreviousWalks[0];
+        running = model.GenerateAsync();
+        check(model.Busy && ports.PlaceCalls == 2, "Blog generation remains cancellable during comparison geocoding");
+        model.Cancel();
+        await running;
+        check(model.Idle && ports.BlogCalls == 0 && ports.Errors.Count == 0 &&
+              model.Current!.Places.Count == 1 && model.Previous.Places.Count == 0 &&
+              ports.Initial.Saves == 2 && model.Status.Contains("キャンセル"),
+            "Cancelled geocoding retains already saved current places and never starts Azure");
 
         ports = new();
         model = ports.Model();
@@ -275,6 +349,7 @@ internal static class WorkspaceChecks
         {
             ct.ThrowIfCancellationRequested();
             Saves++;
+            ports.EnrichmentEvents.Add("save:" + walk.Title);
             if (Saves == SaveFailureAt) throw new IOException("Save failed");
             return Task.CompletedTask;
         }
@@ -308,6 +383,8 @@ internal static class WorkspaceChecks
         public FakeArchive Initial { get; }
         public SettingsData Configuration { get; private set; }
         public List<string> Events { get; } = [];
+        public List<string> EnrichmentEvents { get; } = [];
+        public List<(string Text, string Title)> Confirmations { get; } = [];
         public List<string> Errors { get; } = [];
         public List<string> DownloadRoots { get; } = [];
         public List<RemoteFile> Catalog { get; init; } = [new(1, "track.ndjson", 1), new(2, "IMG_1.jpg", 1)];
@@ -318,6 +395,10 @@ internal static class WorkspaceChecks
         public WalkSession? LastPrevious { get; private set; }
         public bool LastIncludePhotos { get; private set; }
         public bool Consent { get; init; } = true;
+        public string? DeclinedConfirmation { get; init; }
+        public int PlaceFailureAt { get; init; }
+        public TaskCompletionSource? PlaceGate { get; init; }
+        public int PlaceGateAt { get; init; } = 1;
         public bool CancelDialogs { get; init; }
         public bool CancelPhotoTime { get; init; }
         public bool MetadataFailure { get; init; }
@@ -352,14 +433,19 @@ internal static class WorkspaceChecks
             WalkSession? previous, string photoFolder, bool includePhotos, CancellationToken ct)
         {
             BlogCalls++;
+            EnrichmentEvents.Add("blog");
             LastPrevious = previous;
             LastIncludePhotos = includePhotos;
             return Task.FromResult("generated");
         }
-        public Task<List<PlaceLabel>> ResolveAsync(WalkSession walk, string contact, CancellationToken ct)
+        public async Task<List<PlaceLabel>> ResolveAsync(WalkSession walk, string contact, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             PlaceCalls++;
-            return Task.FromResult(new List<PlaceLabel> { new(35, 139, "test place") });
+            EnrichmentEvents.Add("places:" + walk.Title);
+            if (PlaceGate is { } gate && PlaceCalls == PlaceGateAt) await gate.Task.WaitAsync(ct);
+            if (PlaceCalls == PlaceFailureAt) throw new HttpRequestException("Nominatim lookup failed");
+            return [new(35, 139, "test place")];
         }
         public string ToGpx(WalkSession walk) => "gpx:" + walk.Title;
         public Task WriteTextAsync(string path, string text, CancellationToken ct = default)
@@ -376,7 +462,11 @@ internal static class WorkspaceChecks
         public string? OpenPhotoFile() => CancelDialogs ? null : "photo.jpg";
         public string? ChooseArchiveFolder() => CancelDialogs ? null : LocalRoot;
         public string? SaveFile(string filename, string filter) => CancelDialogs ? null : Path.Combine(LocalRoot, filename);
-        public bool Confirm(string text, string title) => Consent;
+        public bool Confirm(string text, string title)
+        {
+            Confirmations.Add((text, title));
+            return Consent && title != DeclinedConfirmation;
+        }
         public DateTimeOffset? ChoosePhotoTime(DateTime initialTime) => CancelPhotoTime ? null : PhotoTime;
         public void OpenFolder(string folder) { }
         public Task<string> ReportAsync(Exception exception, string? context = null, IProgress<string>? status = null)
